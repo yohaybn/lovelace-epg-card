@@ -11,7 +11,7 @@ This is a custom Lovelace card for Home Assistant that displays Electronic Progr
 * Configurable row height for program entries.
 * Tooltips on program entries showing title, description, and start/end times.
 * Easy configuration through the Lovelace UI editor.
-
+![screenshot](/images/screenshot.png)
 ## Installation
 
 1. **Manual Installation:**
@@ -53,6 +53,8 @@ row_height: 120
 ## Styling
 
 The current styling of the card is quite basic. I apologize for this! I am not a designer. Contributions to improve the look and feel of the card are highly encouraged and very welcome! Please feel free to submit pull requests with CSS improvements or suggestions.
+
+
 
 ## Troubleshooting
 
