@@ -101,9 +101,9 @@ class EPGCard extends HTMLElement {
                  .program {
       position: absolute;
       height: ${row_height}px;
-      background-color: rgb(204, 225, 248);
-      border-color: gray:
-      color: black;
+      background-color: gray;
+      border-color: gray;
+      color: white;
       border-radius: 4px;
       padding: 5px;
       display: flex;
