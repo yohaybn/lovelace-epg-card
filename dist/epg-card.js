@@ -62,126 +62,123 @@ class EPGCard extends HTMLElement {
 
     this.content.innerHTML = `
         <style>
-                .epg-card {
-                     font-family: Arial, sans-serif;
-                     width: 100%;
-                     overflow-x: auto;
-                 }
-                 .timeline {
-                     display: flex;
-                     margin-bottom: 10px;
-                     padding-left: 10%;
-                 }
-                 .timeline div {
-                     flex: 1;
-                     text-align: center;
-                     font-weight: bold;
-                     border-right: 1px solid #ccc;
-                     padding: 5px 0;
-                     min-width: 60px;
-                 }
-                 .channel-row {
-                    height: ${row_height + 10}px;
-                     display: flex;
-                     align-items: center;
-                     margin-bottom: 5px;
-                 }
-                 .channel-name {
-                     width: 10%;
-                     font-weight: bold;
-                     text-align: right;
-                     padding-right: 10px;
-                 }
-                 .programs {
-                     display: flex;
-                     width: 90%;
-                     position: relative;
-                     height: ${row_height}px;
-                 }
-                 .program {
-      position: absolute;
-      height: ${row_height}px;
-      background-color: gray;
-      border-color: gray;
-      color: white;
-      border-radius: 4px;
-      padding: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: normal; /* Allow text to wrap */
-      cursor: pointer;
-      font-size: 14px;
-      word-wrap: break-word;
-  }
+            .epg-card {
+                font-family: Arial, sans-serif;
+                width: 100%;
+                overflow-x: auto;
+            }
+            .timeline {
+                display: flex;
+                margin-bottom: 10px;
+                padding-left: 10%;
+            }
+            .timeline div {
+                flex: 1;
+                text-align: center;
+                font-weight: bold;
+                border-right: 1px solid #ccc;
+                padding: 5px 0;
+                min-width: 60px;
+            }
+            .channel-row {
+                height: ${row_height + 10}px;
+                display: flex;
+                align-items: center;
+                margin-bottom: 5px;
+            }
+            .channel-name {
+                width: 10%;
+                font-weight: bold;
+                text-align: right;
+                padding-right: 10px;
+            }
+            .programs {
+                display: flex;
+                width: 90%;
+                position: relative;
+                height: ${row_height}px;
+            }
+            .program {
+                position: absolute;
+                height: ${row_height}px;
+                background-color: gray;
+                border-color: gray;
+                color: white;
+                border-radius: 4px;
+                padding: 5px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: normal; /* Allow text to wrap */
+                cursor: pointer;
+                font-size: 14px;
+                word-wrap: break-word;
+            }
+            .program:hover {
+                background-color: #0056b3;
+            }
+            .program-tooltip {
+                display: none;
+                position: fixed; /* Use fixed to break out of the parent */
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 8px;
+                font-size: 14px;
+                z-index: 1000; /* Ensure tooltip is always on top */
+                max-width: 300px;
+                word-wrap: break-word;
+                line-height: 1.5;
+                white-space: normal;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            }
+            .program:hover .program-tooltip {
+                display: block;
+            }
+        </style>
 
-  .program:hover {
-      background-color: #0056b3;
-  }
-
-  .program-tooltip {
-      display: none;
-      position: fixed; /* Use fixed to break out of the parent */
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-size: 14px;
-      z-index: 1000; /* Ensure tooltip is always on top */
-      max-width: 300px;
-      word-wrap: break-word;
-      line-height: 1.5;
-      white-space: normal;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  .program:hover .program-tooltip {
-      display: block;
-  }
-            </style>
-
-            <div class="epg-card">
-                <div class="timeline">${timeline
-                  .map((time) => `<div>${time}</div>`)
-                  .join("")}</div>
-                ${channels
-                  .map(
-                    (channel) => `
-                        <div class="channel-row">
-                            <div class="channel-name">${channel}</div>
-                            <div class="programs">
-                                ${epgData[channel]
-                                  .map(
-                                    (program) => `
-                                        <div class="program"
-                                            style="left: ${this._calculatePosition(
-                                              program.start
-                                            )}%;
-                                                   width: ${this._calculateWidth(
-                                                     program.start,
-                                                     program.end
-                                                   )}%;">
-                                            ${program.title}
-                                            <span class="program-tooltip">
-                                              <div>  ${program.title}</div>
-                                              <div> ${program.desc}</div>
-                                              <div> ${program.start}-${
-                                      program.end
-                                    }</div>
-                                            </span>
-                                        </div>
-                                    `
-                                  )
-                                  .join("")}
-                            </div>
-                        </div>`
-                  )
-                  .join("")}
-            </div>
+        <div class="epg-card">
+            <div class="timeline">${timeline
+              .map((time) => `<div>${time}</div>`)
+              .join("")}</div>
+            ${channels
+              .map(
+                (channel) => `
+                    <div class="channel-row">
+                        <div class="channel-name">${channel}</div>
+                        <div class="programs">
+                            ${epgData[channel]
+                              .map(
+                                (program) => `
+                                    <div class="program"
+                                        style="left: ${this._calculatePosition(
+                                          program.start
+                                        )}%;
+                                              width: ${this._calculateWidth(
+                                                program.start,
+                                                program.end
+                                              )}%;">
+                                        ${program.title}
+                                        <span class="program-tooltip">
+                                          <div>  ${program.title}</div>
+                                          <div> ${program.desc}</div>
+                                          <div> ${program.start}-${
+                                  program.end
+                                }</div>
+                                        </span>
+                                    </div>
+                                `
+                              )
+                              .join("")}
+                        </div>
+                    </div>`
+              )
+              .join("")}
+        </div>
         `;
   }
 
