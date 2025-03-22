@@ -1,8 +1,8 @@
-import {
-  LitElement,
-  html,
-  css,
-} from "https://unpkg.com/lit-element@2.0.1?module";
+const LitElement = Object.getPrototypeOf(
+  customElements.get("ha-panel-lovelace")
+);
+const html = LitElement.prototype.html;
+const css = LitElement.prototype.css;
 
 class EPGCard extends HTMLElement {
   static getConfigElement() {
