@@ -201,6 +201,16 @@ class EPGCard extends HTMLElement {
 
   _calculatePosition(start) {
     const currentTime = new Date();
+    const now = `${currentTime
+      .getHours()
+      .toString()
+      .padStart(2, "0")}:${currentTime
+      .getMinutes()
+      .toString()
+      .padStart(2, "0")}`;
+    if (start < now) {
+      start = now;
+    }
     const startOfDay = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesInDay = 1440 - startOfDay;
     const offset =
@@ -212,6 +222,16 @@ class EPGCard extends HTMLElement {
 
   _calculateWidth(start, end) {
     const currentTime = new Date();
+    const now = `${currentTime
+      .getHours()
+      .toString()
+      .padStart(2, "0")}:${currentTime
+      .getMinutes()
+      .toString()
+      .padStart(2, "0")}`;
+    if (start < now) {
+      start = now;
+    }
     const startOfDay = currentTime.getHours() * 60 + currentTime.getMinutes();
     const totalMinutesInDay = 1440 - startOfDay;
     const duration =
@@ -320,6 +340,5 @@ window.customCards.push({
   name: "EPG Card",
   preview: false, // Optional - defaults to false
   description: "A custom card for HomeAssistant-EPG!", // Optional
-  documentationURL:
-    "https://github.com/yohaybn/lovelace-epg-card", // Adds a help link in the frontend card editor
+  documentationURL: "https://github.com/yohaybn/lovelace-epg-card", // Adds a help link in the frontend card editor
 });
