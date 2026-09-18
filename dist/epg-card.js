@@ -4,11 +4,17 @@
  * https://github.com/yohaybn/lovelace-epg-card
  */
 
-const LitElement = Object.getPrototypeOf(
-  customElements.get("ha-panel-lovelace")
-);
-const html = LitElement.prototype.html;
-const css = LitElement.prototype.css;
+// In some setups the Lovelace panel element is not registered yet when this
+// module loads. Fall back gracefully so the card itself still works instead
+// of failing with "Custom element doesn't exist".
+const HaPanelLovelace = customElements.get("ha-panel-lovelace");
+const LitElement = HaPanelLovelace
+  ? Object.getPrototypeOf(HaPanelLovelace)
+  : HTMLElement;
+const _templateFallback = (strings, ...values) =>
+  strings.reduce((acc, str, i) => acc + str + (values[i] ?? ""), "");
+const html = LitElement.prototype.html || _templateFallback;
+const css = LitElement.prototype.css || html || _templateFallback;
 
 const DEFAULT_ROW_HEIGHT = 72;
 const DEFAULT_HOUR_WIDTH = 110;
@@ -39,6 +45,14 @@ class EPGCard extends HTMLElement {
     this.shadowRoot.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") this._hideTooltip();
     });
+    // The tooltip is viewport-positioned; hide it when anything scrolls so it
+    // never floats detached from its program (issue #7).
+    this._onWindowScroll = () => this._hideTooltip();
+    window.addEventListener("scroll", this._onWindowScroll, true);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("scroll", this._onWindowScroll, true);
   }
 
   setConfig(config) {
@@ -74,18 +88,21 @@ class EPGCard extends HTMLElement {
         continue;
       }
       const unavailable = state.state === "unavailable" || state.state === "unknown";
+      const programs = [];
       const today = state.attributes.today || {};
       const starts = Object.keys(today).sort();
-      const programs = starts.map((start) => {
-        const program = today[start];
-        return {
-          title: program.title || "",
-          desc: program.desc || "",
-          subTitle: program.sub_title || "",
-          start,
-          end: program.end || this._calculateEndTime(start, starts),
-        };
-      });
+      for (const start of starts) {
+        programs.push(this._normalizeProgram(today[start], start, false, starts));
+      }
+      // The integration exposes tomorrow's schedule when its full_schedule
+      // option is enabled; append those programs after midnight.
+      const tomorrow = state.attributes.tomorrow || {};
+      const tomorrowStarts = Object.keys(tomorrow).sort();
+      for (const start of tomorrowStarts) {
+        programs.push(
+          this._normalizeProgram(tomorrow[start], start, true, tomorrowStarts)
+        );
+      }
       channels.push({
         entityId,
         name:
@@ -93,11 +110,47 @@ class EPGCard extends HTMLElement {
           state.attributes.friendly_name ||
           entityId,
         icon: state.attributes.channel_icon || null,
-        programs,
+        programs: programs.filter(Boolean),
         unavailable,
       });
     }
     return { channels, missing };
+  }
+
+  // Converts HH:MM strings into absolute minutes so programs that cross
+  // midnight (end smaller than start) and tomorrow's schedule line up after
+  // today's on one continuous timeline.
+  _normalizeProgram(program, start, isTomorrow, siblingStarts) {
+    const now = this._nowMinutes();
+    const end = program.end || this._calculateEndTime(start, siblingStarts);
+    const dayOffset = isTomorrow ? 1440 : 0;
+    const rawStart = this._convertTimeToMinutes(start) + dayOffset;
+    let endAbs = this._convertTimeToMinutes(end) + dayOffset;
+    if (endAbs <= rawStart) endAbs += 1440;
+    let startAbs = rawStart;
+    if (!isTomorrow && startAbs < now) {
+      if (endAbs <= now) return null; // already over
+      startAbs = now; // airing right now: clamp to the left edge
+    }
+    return {
+      title: program.title || "",
+      desc: program.desc || "",
+      subTitle: program.sub_title || "",
+      start,
+      end,
+      startAbs,
+      endAbs,
+    };
+  }
+
+  _windowEnd(channels) {
+    let maxEnd = 1440;
+    for (const channel of channels) {
+      for (const program of channel.programs) {
+        if (program.endAbs > maxEnd) maxEnd = program.endAbs;
+      }
+    }
+    return maxEnd;
   }
 
   _renderKey(channels, missing) {
@@ -156,7 +209,10 @@ class EPGCard extends HTMLElement {
     this._firstMissingAt = null;
 
     this._channelCount = channels.length;
-    this._setContent(this._guideTemplate(channels, missing, rowHeight), title);
+    this._setContent(
+      this._guideTemplate(channels, missing, rowHeight, this._windowEnd(channels)),
+      title
+    );
   }
 
   _scheduleRetry() {
@@ -167,6 +223,8 @@ class EPGCard extends HTMLElement {
   }
 
   _setContent(bodyTemplate, title) {
+    const oldScroll = this.shadowRoot.querySelector(".epg-scroll");
+    const scrollLeft = oldScroll ? oldScroll.scrollLeft : 0;
     this.shadowRoot.innerHTML = `
       ${this._styles()}
       <ha-card>
@@ -175,6 +233,8 @@ class EPGCard extends HTMLElement {
         <div class="epg-tooltip" role="tooltip" hidden></div>
       </ha-card>
     `;
+    const newScroll = this.shadowRoot.querySelector(".epg-scroll");
+    if (newScroll) newScroll.scrollLeft = scrollLeft;
   }
 
   _styles() {
@@ -284,6 +344,10 @@ class EPGCard extends HTMLElement {
       }
       :host-context([dir="rtl"]) .hour-tick.edge-end {
         transform: translateX(100%);
+      }
+      .hour-tick.half {
+        opacity: 0.55;
+        font-size: 10px;
       }
       .hour-tick::after {
         content: "";
@@ -522,8 +586,8 @@ class EPGCard extends HTMLElement {
       </div>`;
   }
 
-  _guideTemplate(channels, missing, rowHeight) {
-    const { ticks, trackMinWidth } = this._timelineTicks();
+  _guideTemplate(channels, missing, rowHeight, windowEnd) {
+    const { ticks, trackMinWidth } = this._timelineTicks(windowEnd);
     const warning = missing.length
       ? `<div class="banner"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${this._escape(
           `Some entities were not found: ${missing.join(", ")}`
@@ -533,7 +597,7 @@ class EPGCard extends HTMLElement {
     const rows = channels
       .map((channel) => {
         const programs = channel.programs
-          .map((program) => this._programTemplate(program, rowHeight))
+          .map((program) => this._programTemplate(program, rowHeight, windowEnd))
           .join("");
         const track = channel.unavailable
           ? `<div class="programs-track empty" style="height: ${rowHeight}px;"><span>Unavailable</span></div>`
@@ -584,19 +648,22 @@ class EPGCard extends HTMLElement {
     return `<div class="channel-fallback">${this._escape(initials)}</div>`;
   }
 
-  _programTemplate(program, rowHeight) {
-    const pos = this._calculatePosition(program.start);
-    const width = this._calculateWidth(program.start, program.end);
-    if (width <= 0) return "";
+  _programTemplate(program, rowHeight, windowEnd) {
     const now = this._nowMinutes();
-    const startMin = this._convertTimeToMinutes(this._clampStart(program.start));
-    const endMin = this._convertTimeToMinutes(program.end);
-    const isCurrent =
-      this._convertTimeToMinutes(program.start) <= now && now < endMin;
+    const span = Math.max(windowEnd - now, 1);
+    const pos = ((program.startAbs - now) / span) * 100;
+    const width = ((program.endAbs - program.startAbs) / span) * 100;
+    if (width <= 0) return "";
+    const isCurrent = program.startAbs <= now && now < program.endAbs;
     const progress = isCurrent
       ? Math.min(
           100,
-          Math.max(0, ((now - startMin) / Math.max(endMin - startMin, 1)) * 100)
+          Math.max(
+            0,
+            ((now - program.startAbs) /
+              Math.max(program.endAbs - program.startAbs, 1)) *
+              100
+          )
         )
       : 0;
     const narrow = width < 9;
@@ -677,56 +744,30 @@ class EPGCard extends HTMLElement {
     return now.getHours() * 60 + now.getMinutes();
   }
 
-  _clampStart(start) {
-    const now = new Date();
-    const nowStr = `${now.getHours().toString().padStart(2, "0")}:${now
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}`;
-    return start < nowStr ? nowStr : start;
-  }
-
-  _timelineTicks() {
-    const totalMinutesInDay = 1440 - this._nowMinutes();
+  _timelineTicks(windowEnd) {
+    const now = this._nowMinutes();
+    const span = Math.max(windowEnd - now, 1);
     const hourWidth =
       Number(this.config.hour_width) > 0
         ? Number(this.config.hour_width)
         : DEFAULT_HOUR_WIDTH;
-    const trackMinWidth = Math.max(
-      320,
-      (totalMinutesInDay / 60) * hourWidth
-    );
+    const trackMinWidth = Math.max(320, (span / 60) * hourWidth);
+    const stepMinutes = hourWidth >= 160 ? 30 : 60;
     const ticks = [];
-    const firstHour = Math.ceil(this._nowMinutes() / 60);
-    for (let hour = firstHour; hour < 24; hour++) {
-      const label = `${hour.toString().padStart(2, "0")}:00`;
-      const pos = this._calculatePosition(label);
+    const first = Math.ceil(now / stepMinutes) * stepMinutes;
+    for (let minute = first; minute < windowEnd; minute += stepMinutes) {
+      const clock = minute % 1440;
+      const label = `${Math.floor(clock / 60)
+        .toString()
+        .padStart(2, "0")}:${(clock % 60).toString().padStart(2, "0")}`;
+      const pos = ((minute - now) / span) * 100;
       const edge = pos < 4 ? " edge-start" : pos > 96 ? " edge-end" : "";
-      ticks.push(`<div class="hour-tick${edge}" style="--pos: ${pos}%">${label}</div>`);
+      const half = minute % 60 !== 0 ? " half" : "";
+      ticks.push(
+        `<div class="hour-tick${edge}${half}" style="--pos: ${pos}%">${label}</div>`
+      );
     }
     return { ticks: ticks.join(""), trackMinWidth };
-  }
-
-  _calculatePosition(start) {
-    const startOfDay = this._nowMinutes();
-    const totalMinutesInDay = 1440 - startOfDay;
-    const offset =
-      (this._convertTimeToMinutes(this._clampStart(start)) -
-        startOfDay +
-        totalMinutesInDay) %
-      totalMinutesInDay;
-    return (offset / totalMinutesInDay) * 100;
-  }
-
-  _calculateWidth(start, end) {
-    const startOfDay = this._nowMinutes();
-    const totalMinutesInDay = 1440 - startOfDay;
-    const duration =
-      (this._convertTimeToMinutes(end) -
-        this._convertTimeToMinutes(this._clampStart(start)) +
-        totalMinutesInDay) %
-      totalMinutesInDay;
-    return (duration / totalMinutesInDay) * 100;
   }
 
   _convertTimeToMinutes(time) {
@@ -810,6 +851,13 @@ class EPGCardEditor extends LitElement {
               number: { min: 48, max: 300, unit: "px", default: DEFAULT_ROW_HEIGHT },
             },
             default: DEFAULT_ROW_HEIGHT,
+          },
+          {
+            name: "hour_width",
+            selector: {
+              number: { min: 60, max: 400, unit: "px", default: DEFAULT_HOUR_WIDTH },
+            },
+            default: DEFAULT_HOUR_WIDTH,
           },
         ]}
         @value-changed=${this._valueChanged}

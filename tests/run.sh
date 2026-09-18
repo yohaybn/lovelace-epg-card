@@ -9,15 +9,15 @@ OUT="$HERE/screenshots"
 mkdir -p "$OUT"
 FAIL=0
 
-render() { # name width height extra-flags
-  local name="$1" width="$2" height="$3"
+render() { # name width height [extra-query]
+  local name="$1" width="$2" height="$3" extra="${4:-}"
   "$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
     --force-device-scale-factor=1 --window-size="$width,$height" \
     --virtual-time-budget=6000 \
-    --screenshot="$OUT/$name.png" "$PAGE?scenario=$name" >/dev/null 2>&1
+    --screenshot="$OUT/$name.png" "$PAGE?scenario=$name$extra" >/dev/null 2>&1
   "$CHROME" --headless=new --disable-gpu --no-sandbox \
     --virtual-time-budget=6000 \
-    --dump-dom "$PAGE?scenario=$name" >"$OUT/$name.dom.html" 2>/dev/null
+    --dump-dom "$PAGE?scenario=$name$extra" >"$OUT/$name.dom.html" 2>/dev/null
 }
 
 check() { # file pattern description
@@ -47,6 +47,10 @@ render state-error 1280 700
 CHROME_BUDGET=3000; "$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=1 --window-size=1280,700 --virtual-time-budget=$CHROME_BUDGET --screenshot="$OUT/state-loading.png" "$PAGE?scenario=state-loading" >/dev/null 2>&1
 "$CHROME" --headless=new --disable-gpu --no-sandbox --virtual-time-budget=$CHROME_BUDGET --dump-dom "$PAGE?scenario=state-loading" >"$OUT/state-loading.dom.html" 2>/dev/null
 render state-partial 1280 900
+render midnight 1280 700 '&fakeTime=22:30'
+render tomorrow 1280 700 '&fakeTime=22:30'
+render scroll-preserve 1280 700
+render tooltip-scrolled 1280 900
 
 check desktop-light 'class="program' "renders program blocks"
 check desktop-light 'program current' "highlights the current program"
@@ -66,6 +70,12 @@ check state-error 'state-block error' "missing entities produce error state afte
 check state-loading 'skeleton-block' "loading state shows skeleton"
 check state-loading 'aria-busy="true"' "loading state announces busy"
 check state-partial 'class="banner"' "partial missing entities show warning banner"
+check midnight '&gt;00:00' "midnight rollover renders a 00:00 tick"
+check midnight 'Late Movie Crossing Midnight' "over-midnight program is rendered"
+check tomorrow 'Tomorrow Breakfast' "tomorrow schedule is rendered when present"
+check tomorrow '&gt;05:00' "timeline extends past midnight into tomorrow"
+check scroll-preserve 'data-scroll-left="150"' "horizontal scroll position survives re-render"
+check tooltip-scrolled 'data-tip-top="[0-9]' "tooltip stays viewport-positioned after page scroll"
 check_absent desktop-light '&lt;script' "no unescaped HTML injection"
 
 if [ "$FAIL" -eq 0 ]; then

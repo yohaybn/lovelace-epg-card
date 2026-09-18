@@ -37,6 +37,32 @@
 </head>
 <body>
 <div class="wrap"><epg-card id="card"></epg-card></div>
+<script>
+// Optional fake clock, must run before the card renders.
+(function () {
+  const params = new URLSearchParams(location.search);
+  const fake = params.get("fakeTime");
+  if (!fake) return;
+  const [h, m] = fake.split(":").map(Number);
+  window.__NOW_MINUTES = h * 60 + m;
+  const RealDate = Date;
+  window.Date = class extends RealDate {
+    constructor(...args) {
+      if (args.length === 0) {
+        super();
+        this.setHours(h, m, 0, 0);
+      } else {
+        super(...args);
+      }
+    }
+    static now() {
+      const d = new RealDate();
+      d.setHours(h, m, 0, 0);
+      return d.getTime();
+    }
+  };
+})();
+</script>
 <script src="./stubs.js"></script>
 <script src="./mock-hass.js"></script>
 <script src="../../dist/epg-card.js"></script>
@@ -50,7 +76,9 @@
     document.documentElement.lang = "he";
   }
   const card = document.getElementById("card");
-  const variant = scenario.includes("rtl") ? "rtl" : "default";
+  let variant = "default";
+  if (scenario.includes("rtl")) variant = "rtl";
+  if (scenario === "midnight" || scenario === "tomorrow") variant = scenario;
   const hass = window.mockHass(variant);
 
   let entities;
@@ -64,7 +92,9 @@
   } else {
     entities = Object.keys(hass.states);
   }
-  card.setConfig({ entities, row_height: 84, title: "TV Guide" });
+  const cfg = { entities, row_height: 84, title: "TV Guide" };
+  if (scenario === "scroll-preserve") cfg.hour_width = 220;
+  card.setConfig(cfg);
 
   if (scenario === "state-loading") {
     // Freeze the loading grace window by feeding an empty states map.
@@ -72,10 +102,29 @@
   } else {
     card.hass = hass;
   }
-  if (scenario === "tooltip") {
+  if (scenario === "tooltip" || scenario === "tooltip-scrolled") {
     setTimeout(() => {
+      if (scenario === "tooltip-scrolled") window.scrollTo(0, 300);
       const program = card.shadowRoot.querySelectorAll(".program")[2];
       program.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true }));
+      setTimeout(() => {
+        const tip = card.shadowRoot.querySelector(".epg-tooltip");
+        const diag = document.getElementById("dump") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "dump" }));
+        diag.dataset.tipTop = tip && !tip.hidden ? tip.style.top : "hidden";
+      }, 150);
+    }, 300);
+  }
+  if (scenario === "scroll-preserve") {
+    setTimeout(() => {
+      const sc = card.shadowRoot.querySelector(".epg-scroll");
+      sc.scrollLeft = 150;
+      card.setConfig({ entities, row_height: 84, title: "TV Guide", hour_width: 220 });
+      card.hass = hass;
+      setTimeout(() => {
+        const sc2 = card.shadowRoot.querySelector(".epg-scroll");
+        const diag = document.getElementById("dump") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "dump" }));
+        diag.dataset.scrollLeft = sc2 ? String(sc2.scrollLeft) : "missing";
+      }, 150);
     }, 300);
   }
   // Serialize the shadow DOM into light DOM so headless --dump-dom can see it.

@@ -13,7 +13,9 @@ This is a custom Lovelace card for Home Assistant that displays Electronic Progr
 * Follows your Home Assistant theme automatically, including dark mode.
 * Full RTL support for right-to-left languages such as Hebrew and Arabic.
 * Loading skeleton, empty-channel, unavailable-channel and error states.
-* Responsive: horizontal scrolling with sticky channel names on narrow screens.
+* Responsive: horizontal scrolling with sticky channel names on narrow screens; your scroll position is preserved when the guide refreshes.
+* Handles programs that run past midnight, and shows tomorrow's schedule too when the integration's `full_schedule` option is enabled.
+* Half-hour timeline ticks appear automatically on wide timelines (`hour_width` of 160px or more).
 * Accessible: keyboard-focusable programs with aria labels, and reduced-motion support.
 * Easy configuration through the Lovelace UI editor.
 ![screenshot](/images/screenshot.png)
@@ -43,7 +45,7 @@ The following options are available:
 * **`entities` (Required):** A list of entity IDs representing your EPG sensors.  These sensors are created and managed by the [HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG) integration.
 * **`title` (Optional):** A title shown at the top of the card.
 * **`row_height` (Optional):** The height of each program row in pixels. Defaults to 72px.
-* **`hour_width` (Optional):** The minimum width in pixels allocated to one hour on the timeline. Increase it to spread programs out on wide screens. Defaults to 110px.
+* **`hour_width` (Optional):** The minimum width in pixels allocated to one hour on the timeline. Increase it to spread programs out on wide screens; at 160px or more, half-hour ticks appear. Defaults to 110px.
 
 ## Example Card Configuration
 
@@ -81,6 +83,7 @@ It writes screenshots for desktop, mobile, dark mode, RTL and the loading/empty/
 
 ## Troubleshooting
 
+-   **"Custom element doesn't exist: epg-card"**: The card resource is not loading. Make sure the resource URL points at `epg-card.js` and its type is `module`, then hard-refresh (Ctrl+F5) or clear the browser cache. If you installed manually, bump the `?v=` number in the resource URL so the browser picks up the new file.
 -   **"Error: No entities configured"**: Make sure you have configured at least one entity in the card configuration.
 -   **"Error: Entity [entity_id] not found"**: Double-check that the entity ID is correct and that the entity exists in your Home Assistant instance. Ensure the [HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG) integration is correctly configured and working.
 -   **EPG Data not showing**: Verify the [HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG) integration is providing data to the sensors. Check the Developer Tools -> States menu in Home Assistant to inspect the sensor data.

@@ -4,9 +4,13 @@
     const m = ((totalMinutes % 1440) + 1440) % 1440;
     return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   }
-  function makePrograms(specs) {
+  function nowMinutes() {
+    if (typeof window.__NOW_MINUTES === "number") return window.__NOW_MINUTES;
     const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+  function makePrograms(specs) {
+    const nowMin = nowMinutes();
     const today = {};
     let cursor = nowMin - 45;
     for (const spec of specs) {
@@ -37,6 +41,41 @@
   const longDesc =
     "A long-form documentary exploring the coastline, its wildlife and the people who live there. ".repeat(2);
   window.mockHass = function (variant) {
+    if (variant === "midnight") {
+      // Late-evening guide with a program that crosses midnight.
+      const late = sensor("sensor.epg_night", "Night Channel", null, [
+        { title: "Evening Show", dur: 60 },
+        { title: "Late Movie Crossing Midnight", dur: 200, desc: "Runs past midnight." },
+        { title: "After Midnight Talk", dur: 90 },
+      ]);
+      return { states: { "sensor.epg_night": late } };
+    }
+    if (variant === "tomorrow") {
+      const base = sensor("sensor.epg_full", "Full Schedule", null, [
+        { title: "Tonight Finale", dur: 90 },
+        { title: "Sign Off Movie", dur: 120 },
+      ]);
+      const nowMin = nowMinutes();
+      const tomorrow = {};
+      let cursor = 0; // 00:00 tomorrow
+      for (const spec of [
+        { title: "Tomorrow Breakfast", dur: 120 },
+        { title: "Tomorrow Morning News", dur: 60 },
+        { title: "Tomorrow Matinee", dur: 180 },
+      ]) {
+        const start = hhmm(cursor);
+        tomorrow[start] = {
+          title: spec.title,
+          desc: "",
+          sub_title: "",
+          start,
+          end: hhmm(cursor + spec.dur),
+        };
+        cursor += spec.dur;
+      }
+      base.attributes.tomorrow = tomorrow;
+      return { states: { "sensor.epg_full": base } };
+    }
     if (variant === "rtl") {
       return {
         states: {
