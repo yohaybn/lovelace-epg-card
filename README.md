@@ -2,14 +2,19 @@
 
 # Lovelace EPG Card
 
-This is a custom Lovelace card for Home Assistant that displays Electronic Program Guide (EPG) data. It is designed to work in conjunction with the custom Home Assistant integration available at [https://github.com/yohaybn/HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG).  **You must install this integration for the card to function correctly.** The card fetches program information from the sensors provided by this integration and presents it in a user-friendly timeline format. Please note that the current styling is basic, and contributions to improve its appearance are highly welcome!
+This is a custom Lovelace card for Home Assistant that displays Electronic Program Guide (EPG) data. It is designed to work in conjunction with the custom Home Assistant integration available at [https://github.com/yohaybn/HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG).  **You must install this integration for the card to function correctly.** The card fetches program information from the sensors provided by this integration and presents it in a user-friendly timeline format.
 
 ## Features
 
-* Displays EPG data for multiple channels.
-* Dynamic timeline starting from the current time.
-* Configurable row height for program entries.
-* Tooltips on program entries showing title, description, and start/end times.
+* Displays EPG data for multiple channels, with channel icons and names.
+* Dynamic timeline starting from the current time, with hour ticks.
+* Highlights the program airing right now on each channel, with a progress bar.
+* Tooltips on program entries showing title, description, and start/end times (hover or keyboard focus).
+* Follows your Home Assistant theme automatically, including dark mode.
+* Full RTL support for right-to-left languages such as Hebrew and Arabic.
+* Loading skeleton, empty-channel, unavailable-channel and error states.
+* Responsive: horizontal scrolling with sticky channel names on narrow screens.
+* Accessible: keyboard-focusable programs with aria labels, and reduced-motion support.
 * Easy configuration through the Lovelace UI editor.
 ![screenshot](/images/screenshot.png)
 ## Installation
@@ -36,7 +41,9 @@ You can configure the card through the Lovelace UI editor.  Just add the card to
 The following options are available:
 
 * **`entities` (Required):** A list of entity IDs representing your EPG sensors.  These sensors are created and managed by the [HomeAssistant-EPG](https://github.com/yohaybn/HomeAssistant-EPG) integration.
-* **`row_height` (Optional):** The height of each program row in pixels. Defaults to 100px.
+* **`title` (Optional):** A title shown at the top of the card.
+* **`row_height` (Optional):** The height of each program row in pixels. Defaults to 72px.
+* **`hour_width` (Optional):** The minimum width in pixels allocated to one hour on the timeline. Increase it to spread programs out on wide screens. Defaults to 110px.
 
 ## Example Card Configuration
 
@@ -52,7 +59,23 @@ row_height: 120
 
 ## Styling
 
-The current styling of the card is quite basic. I apologize for this! I am not a designer. Contributions to improve the look and feel of the card are highly encouraged and very welcome! Please feel free to submit pull requests with CSS improvements or suggestions.
+The card follows your active Home Assistant theme, including dark mode, so no extra styling is required. If you want to customize it further, it exposes a few CSS custom properties you can override with [card-mod](https://github.com/thomasloven/lovelace-card-mod):
+
+* `--epg-channel-width` - width of the channel name column (default 120px, 76px on mobile).
+* `--epg-program-border-radius` - corner radius of program blocks (default 10px).
+* `--epg-program-background` - background of upcoming programs.
+* `--epg-current-background` - background of the program airing now.
+* `--epg-current-color` - text color of the program airing now.
+
+## Development
+
+The card is a single dependency-free JavaScript file (`dist/epg-card.js`). The `tests/` directory contains a small harness that renders the card outside Home Assistant with mock data and verifies the markup:
+
+```bash
+tests/run.sh   # requires google-chrome
+```
+
+It writes screenshots for desktop, mobile, dark mode, RTL and the loading/empty/error states into `tests/screenshots/`, and runs DOM assertions for the key behaviors.
 
 
 
