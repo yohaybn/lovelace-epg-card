@@ -46,6 +46,7 @@ The following options are available:
 * **`title` (Optional):** A title shown at the top of the card.
 * **`row_height` (Optional):** The height of each program row in pixels. Defaults to 72px.
 * **`hour_width` (Optional):** The minimum width in pixels allocated to one hour on the timeline. Increase it to spread programs out on wide screens; at 160px or more, half-hour ticks appear. Defaults to 110px.
+* **`channel_action` (Optional):** An action performed when a channel logo (or name) is tapped. Follows the standard Home Assistant action shape: `action` is one of `perform-action` (call a service/script), `more-info` (default), `navigate`, `url`, or `none`. For `perform-action`, set `perform_action` (for example `script.tv_set_channel`) and optional `data` / `target`. Inside `data` string values you can use the placeholders `[[channel_entity]]` and `[[channel_name]]`, which are replaced with the tapped channel, so a single action can switch the TV to whichever channel was tapped. Unavailable channels stay inert.
 
 ## Example Card Configuration
 
@@ -58,6 +59,21 @@ row_height: 120
 
 ```
 
+Tap a channel logo to change the channel on the TV:
+
+```yaml
+type: custom:epg-card
+entities:
+  - sensor.epg_channel_1
+  - sensor.epg_channel_2
+channel_action:
+  action: perform-action
+  perform_action: script.tv_set_channel
+  data:
+    channel_name: "[[channel_name]]"
+    epg_entity: "[[channel_entity]]"
+```
+
 
 ## Styling
 
@@ -68,6 +84,7 @@ The card follows your active Home Assistant theme, including dark mode, so no ex
 * `--epg-program-background` - background of upcoming programs.
 * `--epg-current-background` - background of the program airing now.
 * `--epg-current-color` - text color of the program airing now.
+* `--epg-tooltip-background` - background of the program tooltip. By default it is derived from your theme so it stands out from the guide in both light and dark mode.
 
 ## Development
 
