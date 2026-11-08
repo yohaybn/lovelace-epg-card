@@ -43,6 +43,9 @@ render desktop-dark 1280 900
 render mobile-light 390 844
 render rtl-desktop 1280 900
 render tooltip 1280 900
+render tooltip-dark 1280 900
+render channel-action 1280 900
+render channel-action-dark 1280 900
 render state-error 1280 700
 CHROME_BUDGET=3000; "$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=1 --window-size=1280,700 --virtual-time-budget=$CHROME_BUDGET --screenshot="$OUT/state-loading.png" "$PAGE?scenario=state-loading" >/dev/null 2>&1
 "$CHROME" --headless=new --disable-gpu --no-sandbox --virtual-time-budget=$CHROME_BUDGET --dump-dom "$PAGE?scenario=state-loading" >"$OUT/state-loading.dom.html" 2>/dev/null
@@ -66,6 +69,12 @@ check rtl-desktop 'dir="rtl"' "rtl scenario sets document direction"
 check rtl-desktop 'class="program' "rtl renders programs"
 check tooltip 'role="tooltip"' "tooltip element exists"
 check tooltip 'tooltip-title' "tooltip is populated"
+check tooltip-dark 'tooltip-title' "dark tooltip is populated"
+check channel-action 'channel-cell actionable' "channel logo is actionable when configured"
+check channel-action 'data-cell-role="button"' "actionable channel logo exposes button role"
+check channel-action 'data-cell-entity="sensor.epg_bbc_one"' "channel cell carries its entity"
+check channel-action "data-channel-call=\"\[{'domain':'script','service':'tv_set_channel','data':{'channel_name':'BBC One','epg_entity':'sensor.epg_bbc_one'}" "logo click calls configured service with substituted channel data"
+check_absent desktop-light 'channel-cell actionable' "channel logos stay inert without channel_action"
 check state-error 'state-block error' "missing entities produce error state after grace"
 check state-loading 'skeleton-block' "loading state shows skeleton"
 check state-loading 'aria-busy="true"' "loading state announces busy"
