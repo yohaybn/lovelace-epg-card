@@ -44,7 +44,14 @@ class EPGCard extends HTMLElement {
     this.shadowRoot.addEventListener("focusout", (ev) => this._onHoverOut(ev));
     this.shadowRoot.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") this._hideTooltip();
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      const cell = ev.target.closest && ev.target.closest(".channel-cell.actionable");
+      if (cell) {
+        ev.preventDefault();
+        this._onChannelClick(ev);
+      }
     });
+    this.shadowRoot.addEventListener("click", (ev) => this._onChannelClick(ev));
     // The tooltip is viewport-positioned; hide it when anything scrolls so it
     // never floats detached from its program (issue #7).
     this._onWindowScroll = () => this._hideTooltip();
@@ -169,6 +176,7 @@ class EPGCard extends HTMLElement {
   _render() {
     if (!this.config) return;
     const { channels, missing } = this._collectChannels();
+    this._channels = channels;
     const allMissing = channels.length === 0 && missing.length > 0;
     const pastGrace =
       allMissing &&
@@ -287,6 +295,18 @@ class EPGCard extends HTMLElement {
         text-align: center;
       }
 
+      .channel-cell.actionable {
+        cursor: pointer;
+      }
+      .channel-cell.actionable:hover .channel-icon,
+      .channel-cell.actionable:hover .channel-fallback {
+        filter: brightness(1.15);
+      }
+      .channel-cell.actionable:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: -2px;
+        border-radius: 8px;
+      }
       .channel-icon {
         width: 32px;
         height: 32px;
@@ -505,14 +525,18 @@ class EPGCard extends HTMLElement {
         position: fixed;
         z-index: 1000;
         max-width: min(320px, 80vw);
-        background: var(--card-background-color, #1c1c1c);
+        /* Blend some of the theme's text color into the card surface so the
+           tooltip reads as a raised layer above the guide in dark themes
+           (issue #10). Override with --epg-tooltip-background. */
+        background: var(--epg-tooltip-background,
+          color-mix(in srgb, var(--card-background-color, #1c1c1c) 80%, var(--primary-text-color, #fff)));
         color: var(--primary-text-color, #fff);
-        border: 1px solid var(--divider-color, transparent);
+        border: 1px solid var(--divider-color, #9e9e9e);
         border-radius: 10px;
         padding: 10px 12px;
         font-size: 13px;
         line-height: 1.45;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
         pointer-events: none;
       }
       .tooltip-title {
@@ -604,9 +628,13 @@ class EPGCard extends HTMLElement {
           : channel.programs.length === 0
             ? `<div class="programs-track empty" style="height: ${rowHeight}px;"><span>No programs scheduled</span></div>`
             : `<div class="programs-track" style="height: ${rowHeight}px;">${programs}</div>`;
+        const actionable = !channel.unavailable && this._channelAction();
         return `
           <div class="epg-row">
-            <div class="channel-cell ${channel.unavailable ? "unavailable" : ""}" title="${this._escape(channel.name)}">
+            <div class="channel-cell${channel.unavailable ? " unavailable" : ""}${actionable ? " actionable" : ""}"
+              data-entity="${this._escape(channel.entityId)}"
+              ${actionable ? 'role="button" tabindex="0"' : ""}
+              title="${this._escape(channel.name)}">
               ${this._channelIconTemplate(channel)}
               <div class="channel-name">${this._escape(channel.name)}</div>
             </div>
@@ -737,6 +765,88 @@ class EPGCard extends HTMLElement {
     }
   }
 
+  /* ---------------- channel actions (issue #10) ---------------- */
+
+  _channelAction() {
+    const action = this.config && this.config.channel_action;
+    if (!action || typeof action !== "object") return null;
+    if ((action.action || "more-info") === "none") return null;
+    return action;
+  }
+
+  _onChannelClick(ev) {
+    const cell = ev.target.closest && ev.target.closest(".channel-cell.actionable");
+    if (!cell || !this._hass) return;
+    const channel = (this._channels || []).find(
+      (c) => c.entityId === cell.dataset.entity
+    );
+    if (!channel) return;
+    this._performChannelAction(this._channelAction(), channel);
+  }
+
+  _performChannelAction(action, channel) {
+    const kind = action.action || "more-info";
+    if (kind === "perform-action" || kind === "call-service") {
+      const name = action.perform_action || action.service || "";
+      const dot = name.indexOf(".");
+      if (dot <= 0 || typeof this._hass.callService !== "function") return;
+      this._hass.callService(
+        name.slice(0, dot),
+        name.slice(dot + 1),
+        this._substituteChannelRefs(action.data || action.service_data || {}, channel),
+        action.target
+      );
+      return;
+    }
+    if (kind === "navigate") {
+      if (!action.navigation_path) return;
+      history.pushState(null, "", action.navigation_path);
+      this.dispatchEvent(
+        new CustomEvent("location-changed", {
+          detail: { replace: false },
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
+    }
+    if (kind === "url") {
+      if (action.url_path) window.open(action.url_path, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // Default: show more-info for the channel's EPG entity.
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", {
+        detail: { entityId: action.entity_id || channel.entityId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  // A single global channel_action can still address the tapped channel:
+  // string values inside `data` may embed [[channel_entity]] / [[channel_name]].
+  _substituteChannelRefs(value, channel) {
+    if (typeof value === "string") {
+      return value
+        .split("[[channel_entity]]")
+        .join(channel.entityId)
+        .split("[[channel_name]]")
+        .join(channel.name);
+    }
+    if (Array.isArray(value)) {
+      return value.map((v) => this._substituteChannelRefs(v, channel));
+    }
+    if (value && typeof value === "object") {
+      const out = {};
+      for (const key of Object.keys(value)) {
+        out[key] = this._substituteChannelRefs(value[key], channel);
+      }
+      return out;
+    }
+    return value;
+  }
+
   /* ---------------- time helpers ---------------- */
 
   _nowMinutes() {
@@ -858,6 +968,10 @@ class EPGCardEditor extends LitElement {
               number: { min: 60, max: 400, unit: "px", default: DEFAULT_HOUR_WIDTH },
             },
             default: DEFAULT_HOUR_WIDTH,
+          },
+          {
+            name: "channel_action",
+            selector: { object: {} },
           },
         ]}
         @value-changed=${this._valueChanged}
