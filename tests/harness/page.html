@@ -80,6 +80,10 @@
   if (scenario.includes("rtl")) variant = "rtl";
   if (scenario === "midnight" || scenario === "tomorrow") variant = scenario;
   const hass = window.mockHass(variant);
+  hass.callService = (domain, service, data, target) => {
+    window.__calls = window.__calls || [];
+    window.__calls.push({ domain, service, data, target });
+  };
 
   let entities;
   if (scenario === "state-error") {
@@ -94,6 +98,13 @@
   }
   const cfg = { entities, row_height: 84, title: "TV Guide" };
   if (scenario === "scroll-preserve") cfg.hour_width = 220;
+  if (scenario.startsWith("channel-action")) {
+    cfg.channel_action = {
+      action: "perform-action",
+      perform_action: "script.tv_set_channel",
+      data: { channel_name: "[[channel_name]]", epg_entity: "[[channel_entity]]" },
+    };
+  }
   card.setConfig(cfg);
 
   if (scenario === "state-loading") {
@@ -102,7 +113,7 @@
   } else {
     card.hass = hass;
   }
-  if (scenario === "tooltip" || scenario === "tooltip-scrolled") {
+  if (scenario.startsWith("tooltip")) {
     setTimeout(() => {
       if (scenario === "tooltip-scrolled") window.scrollTo(0, 300);
       const program = card.shadowRoot.querySelectorAll(".program")[2];
@@ -124,6 +135,24 @@
         const sc2 = card.shadowRoot.querySelector(".epg-scroll");
         const diag = document.getElementById("dump") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "dump" }));
         diag.dataset.scrollLeft = sc2 ? String(sc2.scrollLeft) : "missing";
+      }, 150);
+    }, 300);
+  }
+  if (scenario.startsWith("channel-action")) {
+    setTimeout(() => {
+      const cell = card.shadowRoot.querySelector(".channel-cell.actionable");
+      const diag = document.getElementById("dump") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "dump" }));
+      if (!cell) {
+        diag.dataset.cellRole = "missing";
+        diag.dataset.channelCall = "no-actionable-cell";
+        return;
+      }
+      diag.dataset.cellRole = cell.getAttribute("role") || "none";
+      diag.dataset.cellEntity = cell.dataset.entity || "";
+      cell.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+      setTimeout(() => {
+        // Quote-free serialization so DOM checks can match exact calls.
+        diag.dataset.channelCall = JSON.stringify(window.__calls || null).replace(/"/g, "'");
       }, 150);
     }, 300);
   }
